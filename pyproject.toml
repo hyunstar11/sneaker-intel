@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sneaker-intel"
+version = "0.1.0"
+description = "Sneaker Demand Intelligence Platform — ML-powered resale price prediction and market analytics"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Kyuhyun Lim" }]
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "scikit-learn>=1.3",
+    "xgboost>=2.0",
+    "lightgbm>=4.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "matplotlib>=3.7",
+    "seaborn>=0.12",
+    "joblib>=1.3",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.104",
+    "uvicorn[standard]>=0.24",
+    "httpx>=0.25",
+]
+dashboard = [
+    "streamlit>=1.28",
+]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "ruff>=0.1",
+    "ipykernel>=6.25",
+    "notebook>=7.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sneaker_intel"]
+
+[tool.ruff]
+target-version = "py311"
+src = ["src", "tests"]
+line-length = 99
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-v --tb=short"
