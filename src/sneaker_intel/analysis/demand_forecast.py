@@ -1,4 +1,4 @@
-"""Demand tier segmentation and driver analysis."""
+"""Launch demand tier segmentation using aftermarket signals."""
 
 from __future__ import annotations
 

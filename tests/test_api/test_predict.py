@@ -1,4 +1,4 @@
-"""Tests for the predict endpoint."""
+"""Tests for the forecast endpoint."""
 
 from __future__ import annotations
 
@@ -51,10 +51,10 @@ class _DummyEnsemble:
         return np.array([float(X["feature_a"].iloc[0] + X["Number of Sales"].iloc[0])])
 
 
-def test_predict_returns_503_when_model_not_loaded(client: TestClient) -> None:
-    """Predict should 503 when no model is loaded."""
+def test_forecast_returns_503_when_model_not_loaded(client: TestClient) -> None:
+    """Forecast should 503 when no model is loaded."""
     response = client.post(
-        "/api/v1/predict",
+        "/api/v1/forecast",
         json={
             "sneaker_name": "Test-Shoe",
             "retail_price": 220.0,
@@ -67,7 +67,7 @@ def test_predict_returns_503_when_model_not_loaded(client: TestClient) -> None:
     assert response.status_code == 503
 
 
-def test_predict_returns_200_with_loaded_state(client: TestClient) -> None:
+def test_forecast_returns_200_with_loaded_state(client: TestClient) -> None:
     state = get_state()
     state["ensemble"] = _DummyEnsemble()
     state["pipeline"] = _DummyPipeline()
@@ -76,7 +76,7 @@ def test_predict_returns_200_with_loaded_state(client: TestClient) -> None:
     state["default_number_of_sales"] = 3.0
 
     response = client.post(
-        "/api/v1/predict",
+        "/api/v1/forecast",
         json={
             "sneaker_name": "Test-Shoe",
             "retail_price": 220.0,
@@ -89,14 +89,18 @@ def test_predict_returns_200_with_loaded_state(client: TestClient) -> None:
 
     assert response.status_code == 200
     data = response.json()
-    assert data["predicted_price"] == 107.0
+    # Dummy returns 107.0, retail 220.0 → intensity 107/220 ≈ 0.49 → Low
+    assert data["market_signal"] == 107.0
+    assert data["demand_intensity"] == 0.49
+    assert data["demand_tier"] == "Low"
+    assert "Conservative demand signal" in data["recommendation"]
     assert data["model_used"] == "Ensemble"
     assert data["features_used"] == 2
 
 
-def test_predict_returns_422_for_invalid_date_order(client: TestClient) -> None:
+def test_forecast_returns_422_for_invalid_date_order(client: TestClient) -> None:
     response = client.post(
-        "/api/v1/predict",
+        "/api/v1/forecast",
         json={
             "sneaker_name": "Test-Shoe",
             "retail_price": 220.0,

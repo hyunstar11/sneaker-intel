@@ -129,7 +129,7 @@ def train_and_save(output_dir: Path | None = None) -> Path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train sneaker price prediction model")
+    parser = argparse.ArgumentParser(description="Train footwear demand forecasting model")
     parser.add_argument(
         "--output-dir",
         type=Path,

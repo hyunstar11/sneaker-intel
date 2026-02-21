@@ -52,6 +52,9 @@ class FeatureConfig(BaseSettings):
         "Texas",
     ]
 
+    demand_tier_high: float = 1.5
+    demand_tier_medium: float = 1.2
+
     target_column: str = "Sale Price"
     train_size: float = 0.80
     random_state: int = 42

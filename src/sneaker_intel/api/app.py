@@ -11,8 +11,8 @@ from sneaker_intel.api.routes import analytics, health, predict
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(
-        title="Sneaker Demand Intelligence API",
-        description="ML-powered sneaker resale price prediction and market analytics",
+        title="Footwear Launch Intelligence API",
+        description="ML-powered demand forecasting and launch optimization using aftermarket signals",
         version="0.1.0",
         lifespan=lifespan,
     )

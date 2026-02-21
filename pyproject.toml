@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "sneaker-intel"
 version = "0.1.0"
-description = "Sneaker Demand Intelligence Platform — ML-powered resale price prediction and market analytics"
+description = "Footwear Launch Intelligence Platform — ML-powered demand forecasting and launch optimization"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

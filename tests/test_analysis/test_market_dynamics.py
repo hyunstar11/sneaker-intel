@@ -28,3 +28,27 @@ def test_market_inefficiencies_skips_zero_lowest_ask() -> None:
 
     assert len(result) == 1
     assert result.iloc[0]["item"] == "B"
+
+
+def test_overview_ignores_infinite_price_premium() -> None:
+    df = pd.DataFrame(
+        {
+            "item": ["A", "B", "C"],
+            "brand": ["Nike", "Nike", "Jordan"],
+            "pricePremium": [0.5, float("inf"), 1.5],
+            "volatility": [0.1, 0.2, 0.3],
+            "deadstockSold": [10, 20, 30],
+            "highestBid": [10, 20, 30],
+            "lowestAsk": [10, 20, 30],
+            "numberOfBids": [1, 2, 3],
+            "numberOfAsks": [1, 2, 3],
+            "salesThisPeriod": [1, 2, 3],
+        }
+    )
+
+    analyzer = MarketDynamicsAnalyzer(df)
+    overview = analyzer.overview()
+
+    # Mean/median should be computed from finite values only: [0.5, 1.5]
+    assert overview["avg_premium"] == 1.0
+    assert overview["median_premium"] == 1.0

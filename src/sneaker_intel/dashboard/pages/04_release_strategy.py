@@ -10,7 +10,7 @@ from sneaker_intel.visualization.style import apply_nike_style
 
 apply_nike_style()
 
-st.title("Release Strategy Analysis")
+st.title("Launch Strategy Analysis")
 
 try:
     df = load_dataset(DatasetType.MARKET_2023)
@@ -21,7 +21,7 @@ except FileNotFoundError:
 analyzer = ReleaseStrategyAnalyzer(df)
 
 # Timing
-st.subheader("Release Timing Analysis")
+st.subheader("Launch Timing Analysis")
 timing = analyzer.timing_analysis()
 if not timing.empty:
     st.dataframe(timing, use_container_width=True)

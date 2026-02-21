@@ -1,7 +1,8 @@
-"""Market dynamics analysis — liquidity, volatility, inefficiencies."""
+"""Market dynamics analysis — liquidity, volatility, pricing opportunities."""
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 
@@ -10,6 +11,9 @@ class MarketDynamicsAnalyzer:
 
     def __init__(self, df: pd.DataFrame):
         self._df = df.copy()
+        if "pricePremium" in self._df.columns:
+            premium = pd.to_numeric(self._df["pricePremium"], errors="coerce")
+            self._df["pricePremium"] = premium.where(np.isfinite(premium), pd.NA)
 
     def liquidity_analysis(self) -> pd.DataFrame:
         """Analyze market liquidity by brand."""
@@ -32,7 +36,7 @@ class MarketDynamicsAnalyzer:
         ].reset_index(drop=True)
 
     def market_inefficiencies(self) -> pd.DataFrame:
-        """Detect market inefficiencies where highestBid > lowestAsk."""
+        """Detect pricing opportunities where highestBid > lowestAsk."""
         inefficient = self._df[
             (self._df["highestBid"] > self._df["lowestAsk"]) & (self._df["lowestAsk"] > 0)
         ].copy()
@@ -53,11 +57,14 @@ class MarketDynamicsAnalyzer:
     def overview(self) -> dict[str, float]:
         """High-level market overview stats."""
         df = self._df
+        premium = df["pricePremium"].dropna() if "pricePremium" in df.columns else pd.Series()
+        avg_premium = round(float(premium.mean()), 3) if not premium.empty else 0.0
+        median_premium = round(float(premium.median()), 3) if not premium.empty else 0.0
         return {
             "total_products": len(df),
             "total_brands": df["brand"].nunique(),
-            "avg_premium": round(df["pricePremium"].mean(), 3),
-            "median_premium": round(df["pricePremium"].median(), 3),
+            "avg_premium": avg_premium,
+            "median_premium": median_premium,
             "avg_volatility": round(df["volatility"].mean(), 4),
             "total_deadstock_sold": int(df["deadstockSold"].sum()),
         }

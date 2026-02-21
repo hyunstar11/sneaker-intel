@@ -7,27 +7,30 @@ from datetime import date
 from pydantic import BaseModel, Field, model_validator
 
 
-class PredictionRequest(BaseModel):
-    """Request body for price prediction."""
+class LaunchForecastRequest(BaseModel):
+    """Request body for launch demand forecasting."""
 
-    sneaker_name: str = Field(..., description="Full sneaker model name")
-    retail_price: float = Field(gt=0, description="Retail price in USD")
+    sneaker_name: str = Field(..., description="Product name (full model identifier)")
+    retail_price: float = Field(gt=0, description="Launch retail price in USD")
     shoe_size: float = Field(gt=0, description="US shoe size")
-    buyer_region: str = Field(..., description="US state of buyer")
-    order_date: date = Field(..., description="Order date (YYYY-MM-DD)")
-    release_date: date = Field(..., description="Release date (YYYY-MM-DD)")
+    buyer_region: str = Field(..., description="Target market (US state)")
+    order_date: date = Field(..., description="Forecast date (YYYY-MM-DD)")
+    release_date: date = Field(..., description="Launch date (YYYY-MM-DD)")
 
     @model_validator(mode="after")
-    def validate_date_order(self) -> PredictionRequest:
+    def validate_date_order(self) -> LaunchForecastRequest:
         if self.order_date < self.release_date:
             raise ValueError("order_date must be on or after release_date")
         return self
 
 
-class PredictionResponse(BaseModel):
-    """Response body for price prediction."""
+class LaunchForecastResponse(BaseModel):
+    """Response body for launch demand forecasting."""
 
-    predicted_price: float
+    market_signal: float
+    demand_intensity: float
+    demand_tier: str
+    recommendation: str
     model_used: str
     features_used: int
 

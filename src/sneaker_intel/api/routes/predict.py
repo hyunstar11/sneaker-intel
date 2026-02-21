@@ -1,4 +1,4 @@
-"""Price prediction endpoint."""
+"""Launch demand forecasting endpoint."""
 
 from __future__ import annotations
 
@@ -6,14 +6,29 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException
 
 from sneaker_intel.api.dependencies import get_state
-from sneaker_intel.api.schemas import PredictionRequest, PredictionResponse
+from sneaker_intel.api.schemas import LaunchForecastRequest, LaunchForecastResponse
+from sneaker_intel.config import settings
 from sneaker_intel.features.stockx import add_number_of_sales_feature
 
 router = APIRouter(prefix="/api/v1")
 
+_RECOMMENDATIONS = {
+    "High": (
+        "Strong aftermarket signal suggests high launch demand. "
+        "Consider expanded production run with multi-channel distribution (DTC + wholesale)."
+    ),
+    "Medium": (
+        "Moderate demand signal indicates steady sell-through potential. "
+        "Standard production volume with DTC-first allocation recommended."
+    ),
+    "Low": (
+        "Conservative demand signal. Limited release with inventory risk mitigation recommended."
+    ),
+}
 
-@router.post("/predict", response_model=PredictionResponse)
-async def predict_price(request: PredictionRequest) -> PredictionResponse:
+
+@router.post("/forecast", response_model=LaunchForecastResponse)
+async def forecast_demand(request: LaunchForecastRequest) -> LaunchForecastResponse:
     state = get_state()
     ensemble = state.get("ensemble")
     pipeline = state.get("pipeline")
@@ -56,8 +71,21 @@ async def predict_price(request: PredictionRequest) -> PredictionResponse:
 
     prediction = float(ensemble.predict(X_input)[0])
 
-    return PredictionResponse(
-        predicted_price=round(prediction, 2),
+    # Compute demand metrics
+    demand_intensity = prediction / request.retail_price
+    thresholds = settings.features
+    if demand_intensity >= thresholds.demand_tier_high:
+        tier = "High"
+    elif demand_intensity >= thresholds.demand_tier_medium:
+        tier = "Medium"
+    else:
+        tier = "Low"
+
+    return LaunchForecastResponse(
+        market_signal=round(prediction, 2),
+        demand_intensity=round(demand_intensity, 2),
+        demand_tier=tier,
+        recommendation=_RECOMMENDATIONS[tier],
         model_used=ensemble.name,
         features_used=len(feature_cols),
     )

@@ -37,7 +37,7 @@ brand_df = analyzer.liquidity_analysis()
 st.dataframe(brand_df, use_container_width=True)
 
 # Volatility drivers
-st.subheader("Most Volatile Sneakers")
+st.subheader("High-Variance Products")
 volatile_df = analyzer.volatility_drivers(top_n=15)
 st.dataframe(volatile_df, use_container_width=True)
 

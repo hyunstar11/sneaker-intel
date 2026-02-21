@@ -1,4 +1,4 @@
-"""Interactive Price Predictor dashboard page."""
+"""Launch Demand Forecaster dashboard page."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from sneaker_intel.models.random_forest import RandomForestModel
 
 _logger = logging.getLogger(__name__)
 
-st.title("Price Predictor")
+st.title("Launch Demand Forecaster")
 
 
 @st.cache_resource
@@ -81,21 +81,21 @@ except Exception as e:
     st.stop()
 
 # Input form
-with st.form("prediction_form"):
-    sneaker_name = st.text_input("Sneaker Name", "Adidas-Yeezy-Boost-350-V2-Cream-White")
+with st.form("forecast_form"):
+    sneaker_name = st.text_input("Product Name", "Adidas-Yeezy-Boost-350-V2-Cream-White")
     col1, col2 = st.columns(2)
     with col1:
-        retail_price = st.number_input("Retail Price ($)", value=220.0, min_value=1.0)
+        retail_price = st.number_input("Launch Retail Price ($)", value=220.0, min_value=1.0)
         shoe_size = st.number_input("Shoe Size", value=10.0, min_value=1.0, max_value=18.0)
     with col2:
         buyer_region = st.selectbox(
-            "Buyer Region",
+            "Target Market",
             ["California", "New York", "Oregon", "Florida", "Texas", "Other"],
         )
-        order_date = st.date_input("Order Date", value=date.today())
+        order_date = st.date_input("Forecast Date", value=date.today())
         release_date = st.date_input("Release Date", value=date(2018, 1, 1))
 
-    submitted = st.form_submit_button("Predict Price")
+    submitted = st.form_submit_button("Forecast Demand")
 
 if submitted:
     input_df = pd.DataFrame(
@@ -123,5 +123,36 @@ if submitted:
         if col not in transformed.columns:
             transformed[col] = 0
 
-    prediction = ensemble.predict(transformed[feature_cols])
-    st.success(f"Predicted Resale Price: **${prediction[0]:,.2f}**")
+    prediction = float(ensemble.predict(transformed[feature_cols])[0])
+
+    # Compute demand metrics
+    demand_intensity = prediction / retail_price
+    thresholds = settings.features
+    if demand_intensity >= thresholds.demand_tier_high:
+        tier = "High"
+    elif demand_intensity >= thresholds.demand_tier_medium:
+        tier = "Medium"
+    else:
+        tier = "Low"
+
+    recommendations = {
+        "High": (
+            "Strong aftermarket signal suggests high launch demand. "
+            "Consider expanded production run with multi-channel distribution (DTC + wholesale)."
+        ),
+        "Medium": (
+            "Moderate demand signal indicates steady sell-through potential. "
+            "Standard production volume with DTC-first allocation recommended."
+        ),
+        "Low": (
+            "Conservative demand signal. "
+            "Limited release with inventory risk mitigation recommended."
+        ),
+    }
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Market Signal", f"${prediction:,.2f}")
+    c2.metric("Demand Intensity", f"{demand_intensity:.2f}x")
+    c3.metric("Demand Tier", tier)
+
+    st.info(f"**Recommendation:** {recommendations[tier]}")

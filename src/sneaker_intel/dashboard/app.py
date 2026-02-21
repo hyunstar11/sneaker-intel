@@ -7,12 +7,12 @@ import streamlit as st
 from sneaker_intel import __version__
 
 st.set_page_config(
-    page_title="Sneaker Demand Intelligence",
+    page_title="Footwear Launch Intelligence",
     page_icon="👟",
     layout="wide",
 )
 
-st.title("Sneaker Demand Intelligence Platform")
+st.title("Footwear Launch Intelligence Platform")
 st.markdown(f"*Version {__version__}*")
 st.markdown("---")
 
@@ -32,8 +32,8 @@ st.markdown(
     """
     ### Navigate to:
     - **Market Overview** — Brand breakdown, premium distribution, volatility
-    - **Price Predictor** — Interactive resale price prediction
+    - **Launch Forecaster** — Demand forecasting with strategic recommendations
     - **Demand Insights** — Demand tier segmentation and drivers
-    - **Release Strategy** — Timing analysis and pricing insights
+    - **Launch Strategy** — Timing analysis and pricing insights
     """
 )
