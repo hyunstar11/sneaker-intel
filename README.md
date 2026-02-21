@@ -1,6 +1,8 @@
 # Sneaker Demand Intelligence Platform
 
-An end-to-end ML platform that predicts sneaker resale prices and analyzes market dynamics in the secondary sneaker market. Built as a modular Python package with a REST API, interactive dashboard, and Docker deployment.
+An end-to-end ML platform that uses aftermarket demand signals to forecast launch demand and optimize release strategy for footwear products. Built as a modular Python package with a REST API, interactive dashboard, and Docker deployment.
+
+> **Part of a two-project system** — pairs with [reddit-sentiment](https://github.com/hyunstar11/reddit-sentiment), a companion NLP pipeline that monitors Reddit sneaker communities for brand heat signals and model-level sentiment, with eBay resale price correlation.
 
 ## Table of Contents
 
@@ -25,17 +27,19 @@ An end-to-end ML platform that predicts sneaker resale prices and analyzes marke
 
 ## What This Project Does
 
-This platform answers three core business questions relevant to the sneaker and footwear industry:
+This platform answers three core business questions relevant to footwear demand planning and launch optimization:
 
-1. **What will a sneaker resell for?** — Given a sneaker's name, retail price, shoe size, buyer region, and release/order dates, an ensemble ML model (Random Forest + XGBoost + LightGBM) predicts the secondary-market resale price. Trained on 99K+ real StockX transactions.
+1. **How strong is launch demand for a given product?** — Given a product's name, retail price, shoe size, target market, and release/forecast dates, an ensemble ML model (Random Forest + XGBoost + LightGBM) predicts the aftermarket price signal — a proxy for demand intensity. Trained on 99K+ real StockX transactions.
 
-2. **Which sneakers are in high demand, and why?** — KMeans clustering segments ~2,000 sneaker products into High / Medium / Low demand tiers based on sales volume, bid activity, and price premium. A Random Forest classifier then identifies which product characteristics (retail price, volatility, bid count) drive demand.
+2. **Which products are in high demand, and why?** — KMeans clustering segments ~2,000 products into High / Medium / Low demand tiers based on sales volume, bid activity, and price premium. A Random Forest classifier then identifies which product characteristics (retail price, volatility, bid count) drive demand.
 
-3. **How do release timing and pricing affect resale value?** — Analysis of release month, retail price bracket, and brand reveals which strategies correlate with higher premiums, faster sell-through, and greater market liquidity.
+3. **How do launch timing and pricing affect sell-through?** — Analysis of launch month, retail price bracket, and brand reveals which strategies correlate with higher premiums, faster sell-through, and greater market liquidity.
+
+> **Modeling assumption**: Aftermarket resale premium serves as a proxy for unmet demand. A product trading at 1.5x retail on the secondary market signals stronger initial demand than one trading at par. This is the same signal used by industry demand planners to calibrate future production runs.
 
 The platform surfaces these insights through three interfaces:
-- A **FastAPI REST API** for programmatic access (price prediction + market analytics endpoints)
-- A **Streamlit dashboard** with four interactive pages (Market Overview, Price Predictor, Demand Insights, Release Strategy)
+- A **FastAPI REST API** for programmatic access (demand forecasting + market analytics endpoints)
+- A **Streamlit dashboard** with four interactive pages (Market Overview, Launch Forecaster, Demand Insights, Launch Strategy)
 - **Jupyter notebooks** for exploratory analysis and reproducible research
 
 ---
@@ -91,26 +95,26 @@ The restructuring targets roles in data science and ML engineering within the fo
                                  └─────────────┘          └─────────────┘
 ```
 
-**Data flow**: Raw CSV → `loader.py` validates columns → `transformers.py` cleans prices and parses dates → `FeaturePipeline` chains 5 extractors to produce 35 feature columns + `Number of Sales` (36 total) → Models train on features → `evaluation/` computes metrics → API/dashboard serve predictions and analytics.
+**Data flow**: Raw CSV → `loader.py` validates columns → `transformers.py` cleans prices and parses dates → `FeaturePipeline` chains 5 extractors to produce 35 feature columns + `Number of Sales` (36 total) → Models train on features → `evaluation/` computes metrics → API/dashboard serve demand forecasts and analytics.
 
 ---
 
 ## Datasets
 
-### StockX Transactions (2017–2019)
+### StockX Transactions (2017–2019) — Historical Launch Performance Data
 
 **File**: `data/raw/StockX-Data-Contest-2019-3 2.csv` (99,956 rows)
 
-Transaction-level records from the StockX resale marketplace. Each row is one completed sale.
+Transaction-level records from the StockX marketplace, capturing aftermarket demand signals for footwear products. Each row is one completed sale.
 
 | Column | Type | Example | Description |
 |---|---|---|---|
 | Order Date | date | `9/1/2017` | When the transaction occurred |
 | Brand | string | `Yeezy`, `Nike` | Shoe brand |
 | Sneaker Name | string | `Adidas-Yeezy-Boost-350-V2-Beluga` | Full model name (used for feature extraction) |
-| Sale Price | string | `$1,097` | Actual resale price paid (prediction target) |
-| Retail Price | string | `$220` | Original retail price |
-| Release Date | date | `9/24/2016` | When the shoe was first released |
+| Sale Price | string | `$1,097` | Aftermarket sale price (demand signal) |
+| Retail Price | string | `$220` | Original launch retail price |
+| Release Date | date | `9/24/2016` | When the product was first launched |
 | Shoe Size | float | `11.0` | US shoe size |
 | Buyer Region | string | `California` | US state of the buyer |
 
@@ -120,14 +124,14 @@ Transaction-level records from the StockX resale marketplace. Each row is one co
 
 **File**: `data/raw/sneakers2023.csv` (~2,000 rows)
 
-Product-level market data — one row per sneaker model, capturing live marketplace state.
+Product-level market data — one row per product, capturing live marketplace state.
 
 | Column | Type | Description |
 |---|---|---|
-| item | string | Sneaker model name |
+| item | string | Product model name |
 | brand | string | Brand name |
 | retail | float | Retail price |
-| release | date | Release date |
+| release | date | Launch date |
 | lowestAsk | float | Current lowest asking price on the market |
 | highestBid | float | Current highest bid price |
 | numberOfAsks / numberOfBids | int | Active ask/bid count (market depth) |
@@ -140,7 +144,7 @@ Product-level market data — one row per sneaker model, capturing live marketpl
 | annualHigh / annualLow | float | 52-week price range |
 | changePercentage | float | Recent price change percentage |
 
-This dataset powers the market dynamics analysis, demand segmentation, and release strategy modules.
+This dataset powers the market dynamics analysis, demand segmentation, and launch strategy modules.
 
 ---
 
@@ -148,7 +152,7 @@ This dataset powers the market dynamics analysis, demand segmentation, and relea
 
 Features are produced by a composable pipeline of extractors, each inheriting from `BaseFeatureExtractor` (an ABC requiring `extract(df)` → DataFrame and `feature_names` → list[str]).
 
-`FeaturePipeline.stockx_default()` chains all 5 extractors and is used consistently across training, API prediction, and the dashboard — ensuring the same feature logic everywhere.
+`FeaturePipeline.stockx_default()` chains all 5 extractors and is used consistently across training, API forecasting, and the dashboard — ensuring the same feature logic everywhere.
 
 ### StockX Feature Extractors (35 pipeline features + Number of Sales = 36 total)
 
@@ -195,7 +199,7 @@ All models implement a unified `PredictionModel` protocol: `.fit(X, y)`, `.predi
 | LightGBM | 35.55 | 4,309 | ~65.64 | 0.93 |
 | **Ensemble** | **31.90** | **3,281** | **~57.28** | **0.95** |
 
-**Interpretation**: The ensemble model predicts sneaker resale prices within ~$32 of the actual transaction price on average, explaining 95% of the variance. Random Forest alone is the strongest individual model (R²=0.975), but the ensemble provides more robust generalization.
+**Interpretation**: The ensemble model predicts aftermarket prices within ~$32 of the actual transaction price on average, explaining 95% of the variance. This translates directly to demand intensity accuracy — a $32 MAE on a $220 retail product means demand tier classification is reliable within ~0.15x of the true intensity.
 
 ### Model Registry
 
@@ -217,29 +221,29 @@ The registry (`models/registry.py`) uses lazy imports to avoid loading all ML li
 
 ### Demand Segmentation (`analysis/demand_forecast.py`)
 
-**What it does**: Segments sneakers into **High / Medium / Low demand tiers** using KMeans clustering on four features: `salesThisPeriod`, `deadstockSold`, `numberOfBids`, and `pricePremium`.
+**What it does**: Segments products into **High / Medium / Low demand tiers** using KMeans clustering on four features: `salesThisPeriod`, `deadstockSold`, `numberOfBids`, and `pricePremium`.
 
 **How it works**:
 1. `DemandSegmenter.fit_predict(df)` scales the features with `StandardScaler`, runs KMeans (k=3), and maps cluster IDs to tier names by sorting clusters on average `salesThisPeriod`.
 2. `get_tier_summary(df)` produces aggregate stats (mean, median, count) for each tier.
-3. `analyze_demand_drivers(df)` trains a Random Forest classifier on the tier labels and returns feature importances — answering "what makes a sneaker high demand?"
+3. `analyze_demand_drivers(df)` trains a Random Forest classifier on the tier labels and returns feature importances — answering "what makes a product high demand?"
 
-**Expected output**: A DataFrame with a new `demand_tier` column. High-demand sneakers tend to have large bid counts, high sales volume, and moderate-to-high premiums.
+**Expected output**: A DataFrame with a new `demand_tier` column. High-demand products tend to have large bid counts, high sales volume, and moderate-to-high premiums.
 
 ### Market Dynamics (`analysis/market_dynamics.py`)
 
 **What it does**: Provides brand-level and product-level market intelligence.
 
 - `liquidity_analysis()` — Average bids, asks, deadstock sold, and sales per brand. Identifies which brands have the most active secondary markets.
-- `volatility_drivers(top_n=20)` — The N most volatile sneakers with their retail, premium, and sales data. Useful for identifying speculative products.
-- `market_inefficiencies()` — Detects products where `highestBid > lowestAsk` (theoretical arbitrage opportunities), sorted by the arbitrage percentage.
+- `volatility_drivers(top_n=20)` — The N most volatile products with their retail, premium, and sales data. Useful for identifying speculative products.
+- `market_inefficiencies()` — Detects pricing opportunities where `highestBid > lowestAsk`, sorted by the arbitrage percentage.
 - `overview()` — High-level stats: total products, total brands, average premium, median premium, average volatility, total deadstock sold.
 
-### Release Strategy (`analysis/release_strategy.py`)
+### Launch Strategy (`analysis/release_strategy.py`)
 
-**What it does**: Analyzes how release timing and pricing correlate with resale outcomes.
+**What it does**: Analyzes how launch timing and pricing correlate with aftermarket outcomes.
 
-- `timing_analysis()` — Groups products by release month, shows average premium and average sales per month. Reveals seasonal patterns (e.g., holiday releases may carry higher premiums).
+- `timing_analysis()` — Groups products by launch month, shows average premium and average sales per month. Reveals seasonal patterns (e.g., holiday launches may carry higher premiums).
 - `pricing_sensitivity()` — Bins retail prices into brackets (<$100, $100-150, ..., $500+) and shows how premium and sales vary across price tiers.
 - `brand_comparison()` — Compares brands on average premium, average sales, average volatility, and product count.
 
@@ -258,8 +262,8 @@ Health check. Returns service status and version.
 {"status": "healthy", "version": "0.1.0"}
 ```
 
-#### `POST /api/v1/predict`
-Predict resale price for a single sneaker.
+#### `POST /api/v1/forecast`
+Forecast launch demand for a single product.
 
 **Request body**:
 ```json
@@ -276,13 +280,16 @@ Predict resale price for a single sneaker.
 **Response**:
 ```json
 {
-  "predicted_price": 347.52,
+  "market_signal": 347.52,
+  "demand_intensity": 1.58,
+  "demand_tier": "High",
+  "recommendation": "Strong aftermarket signal suggests high launch demand. Consider expanded production run with multi-channel distribution (DTC + wholesale).",
   "model_used": "Ensemble",
   "features_used": 37
 }
 ```
 
-The endpoint internally constructs a single-row DataFrame, runs it through the same `FeaturePipeline.stockx_default()` used in training, aligns columns, and calls `ensemble.predict()`.
+The endpoint internally constructs a single-row DataFrame, runs it through the same `FeaturePipeline.stockx_default()` used in training, aligns columns, and calls `ensemble.predict()`. The raw prediction (aftermarket price) is converted to a demand intensity ratio (market_signal / retail_price) and mapped to a demand tier with a strategic recommendation.
 
 #### `GET /api/v1/analytics/market-overview`
 Returns aggregate market statistics from the sneakers2023 dataset.
@@ -299,7 +306,7 @@ Returns aggregate market statistics from the sneakers2023 dataset.
 ```
 
 #### `GET /api/v1/analytics/demand-tiers?limit=50`
-Returns demand tier classification for each sneaker (up to `limit` rows).
+Returns demand tier classification for each product (up to `limit` rows).
 
 ```json
 [
@@ -325,12 +332,12 @@ Summary KPIs: models trained (4), StockX transactions (99K+), market products (2
 ### 1. Market Overview
 - KPI cards: total products, brands, average premium, average volatility
 - Brand comparison table (liquidity metrics: avg bids, asks, deadstock, sales)
-- Most volatile sneakers table (top 15)
+- High-variance products table (top 15)
 - Market dynamics derived features table (bid-ask spread, demand/supply ratio, etc.)
 
-### 2. Price Predictor
-- Input form: sneaker name, retail price, shoe size, buyer region, order date, release date
-- On submit: trains ensemble model (cached after first load), runs feature pipeline, returns predicted resale price
+### 2. Launch Forecaster
+- Input form: product name, launch retail price, shoe size, target market, forecast date, release date
+- On submit: trains ensemble model (cached after first load), runs feature pipeline, returns demand forecast with market signal, demand intensity, tier, and strategic recommendation
 - Uses `@st.cache_resource` to avoid retraining on every interaction
 
 ### 3. Demand Insights
@@ -339,8 +346,8 @@ Summary KPIs: models trained (4), StockX transactions (99K+), market products (2
 - Demand driver feature importances table
 - Scatter plot of price premium vs sales volume, colored by demand tier
 
-### 4. Release Strategy
-- Release timing table and bar chart (premium by month)
+### 4. Launch Strategy
+- Launch timing table and bar chart (premium by month)
 - Pricing sensitivity table (premium by retail price bracket)
 - Brand comparison table (premium, sales, volatility, count by brand)
 
@@ -352,16 +359,16 @@ Summary KPIs: models trained (4), StockX transactions (99K+), market products (2
 - If `models/ensemble_v1.joblib` exists, the server loads it instantly (~1s startup)
 - If no artifact exists, it falls back to training at startup (~35s)
 - After startup, `GET /health` returns `{"status": "healthy", "version": "0.1.0"}`
-- `POST /api/v1/predict` with sneaker attributes returns a dollar-amount prediction
+- `POST /api/v1/forecast` with product attributes returns a demand forecast with tier and recommendation
 - Analytics endpoints return JSON summaries of the 2023 market data
 
 ### When you run the dashboard (`make run-dashboard`)
 - A browser opens at `localhost:8501` with the Streamlit app
-- The Price Predictor page trains the model on first visit (cached afterwards)
+- The Launch Forecaster page trains the model on first visit (cached afterwards)
 - All market analysis pages load the sneakers2023.csv and compute analytics in real-time
 
 ### When you run tests (`make test`)
-- 41 tests run across 14 test files, covering data loading, price cleaning, feature extraction, pipeline chaining, size normalization, sales features, model registry, ensemble predictions, evaluation metrics, market analysis, and API endpoints (health, predict, analytics)
+- 41 tests run across 14 test files, covering data loading, price cleaning, feature extraction, pipeline chaining, size normalization, sales features, model registry, ensemble predictions, evaluation metrics, market analysis, and API endpoints (health, forecast, analytics)
 - Expected: all 41 passing
 
 ### When you run via Docker (`docker-compose up --build`)
@@ -392,10 +399,10 @@ Portfolio/
 │   └── README.md                                # Data dictionary
 │
 ├── notebooks/
-│   ├── 01_eda_stockx.ipynb                 # Exploratory analysis on StockX data
-│   ├── 02_eda_market_dynamics.ipynb        # Market dynamics exploration
-│   ├── 03_demand_forecasting.ipynb         # Demand tier analysis
-│   ├── 04_release_strategy.ipynb           # Release timing/pricing analysis
+│   ├── 01_eda_stockx.ipynb                 # Historical Launch Data Analysis & Model Comparison
+│   ├── 02_eda_market_dynamics.ipynb        # Competitive Market Intelligence
+│   ├── 03_demand_forecasting.ipynb         # Launch Demand Segmentation
+│   ├── 04_release_strategy.ipynb           # Launch Strategy & Timing Optimization
 │   └── archive/
 │       └── Sneaker_ResellPred_Model_Edit.ipynb  # Original monolithic notebook
 │
@@ -448,14 +455,14 @@ Portfolio/
 │   │   ├── schemas.py                      # Request/response Pydantic models
 │   │   └── routes/
 │   │       ├── health.py                   # GET /health
-│   │       ├── predict.py                  # POST /api/v1/predict
+│   │       ├── predict.py                  # POST /api/v1/forecast
 │   │       └── analytics.py               # GET /api/v1/analytics/market-overview, demand-tiers
 │   │
 │   └── dashboard/
 │       ├── app.py                          # Streamlit entry point (home page)
 │       └── pages/
 │           ├── 01_market_overview.py       # Brand comparison, volatility, market features
-│           ├── 02_price_predictor.py       # Interactive prediction form
+│           ├── 02_price_predictor.py       # Launch demand forecaster
 │           ├── 03_demand_insights.py       # Tier distribution, drivers, scatter plot
 │           └── 04_release_strategy.py      # Timing, pricing sensitivity, brand comparison
 │
@@ -476,10 +483,10 @@ Portfolio/
     ├── test_evaluation/
     │   └── test_metrics.py                 # evaluate_model() and ModelMetrics
     ├── test_analysis/
-    │   └── test_market_dynamics.py          # Market inefficiency edge cases
+    │   └── test_market_dynamics.py          # Market dynamics edge cases
     └── test_api/
         ├── test_health.py                  # GET /health, degraded status
-        ├── test_predict.py                 # POST /predict success, validation, 503
+        ├── test_predict.py                 # POST /forecast success, validation, 503
         └── test_analytics.py              # Market overview and demand tiers
 ```
 
@@ -543,7 +550,7 @@ make test
 |---|---|---|
 | `test_data/test_loader.py` | 3 | Dataset loading, column validation, error on missing columns |
 | `test_data/test_transformers.py` | 3 | `"$1,097"` → `1097.0` conversion, date parsing |
-| `test_features/test_color.py` | 3 | Color flags extracted correctly from sneaker names |
+| `test_features/test_color.py` | 3 | Color flags extracted correctly from product names |
 | `test_features/test_sneaker_type.py` | 2 | Shoe type binary features match expected keywords |
 | `test_features/test_pipeline.py` | 3 | Full pipeline produces all 35 feature columns |
 | `test_features/test_size.py` | 2 | Size normalization reuses training distribution at inference |
@@ -551,9 +558,9 @@ make test
 | `test_models/test_registry.py` | 6 | `get_model()` instantiates all 5 model types, lazy imports |
 | `test_models/test_ensemble.py` | 4 | Ensemble fit/predict, weighted averaging, feature importances |
 | `test_evaluation/test_metrics.py` | 2 | `evaluate_model()` returns correct metric types |
-| `test_analysis/test_market_dynamics.py` | 1 | Market inefficiency zero-ask edge case |
+| `test_analysis/test_market_dynamics.py` | 1 | Market dynamics edge cases |
 | `test_api/test_health.py` | 2 | Health endpoint returns 200, degraded when model missing |
-| `test_api/test_predict.py` | 3 | Predict success, 503 when unloaded, 422 on invalid dates |
+| `test_api/test_predict.py` | 3 | Forecast success, 503 when unloaded, 422 on invalid dates |
 | `test_api/test_analytics.py` | 5 | Market overview and demand tiers endpoints |
 
 All tests use synthetic fixtures (defined in `conftest.py`) — they don't require the real 99K-row dataset.
@@ -587,10 +594,10 @@ All tests use synthetic fixtures (defined in `conftest.py`) — they don't requi
 - **Temporal train/test split** — Current split is random, but this is time-series data. Using chronological splits would give more honest performance estimates
 - **Hyperparameter tuning** — XGBoost params are from the original notebook and likely suboptimal. Optuna or GridSearchCV could improve results
 - **Feature selection** — Many color and region features have near-zero importance. Dropping them would simplify the model with no accuracy loss
-- **More test coverage** — Market dynamics extractor, demand segmenter, release strategy analyzer, and visualization functions are untested
+- **More test coverage** — Market dynamics extractor, demand segmenter, launch strategy analyzer, and visualization functions are untested
 
 ### Nice to Have
 - **MLflow experiment tracking** — Log runs, compare experiments, track model versions
-- **API authentication** — JWT or API key auth for the prediction endpoint
-- **Batch prediction endpoint** — Accept a CSV upload and return predictions for all rows
+- **API authentication** — JWT or API key auth for the forecast endpoint
+- **Batch prediction endpoint** — Accept a CSV upload and return forecasts for all rows
 - **Live data ingestion** — Scheduled pipeline to pull fresh market data (even if simulated)
