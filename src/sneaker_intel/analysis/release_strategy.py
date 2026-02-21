@@ -1,4 +1,4 @@
-"""Release strategy analysis — timing and pricing insights."""
+"""Launch strategy analysis — timing and pricing insights."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import pandas as pd
 
 
 class ReleaseStrategyAnalyzer:
-    """Analyze release timing and pricing strategies."""
+    """Analyze launch timing and pricing strategies."""
 
     def __init__(self, df: pd.DataFrame):
         self._df = df.copy()
