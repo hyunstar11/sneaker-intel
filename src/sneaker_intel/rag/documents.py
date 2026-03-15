@@ -38,7 +38,7 @@ class DocumentBuilder:
 
     def build(self) -> list[Document]:
         """Load all data sources and return the full document set."""
-        from sneaker_intel.data import load_dataset, DatasetType
+        from sneaker_intel.data import DatasetType, load_dataset
 
         mkt = load_dataset(DatasetType.MARKET_2023)
         mkt = mkt[np.isfinite(mkt["pricePremium"])].copy()

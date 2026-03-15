@@ -10,10 +10,7 @@ from pydantic_settings import BaseSettings
 # Resolve project root: works for both local editable installs and Streamlit Cloud
 # (where the package is installed to site-packages and __file__ is not in the repo tree)
 _pkg_relative_root = Path(__file__).resolve().parent.parent.parent
-if (_pkg_relative_root / "data" / "raw").exists():
-    PROJECT_ROOT = _pkg_relative_root
-else:
-    PROJECT_ROOT = Path.cwd()
+PROJECT_ROOT = _pkg_relative_root if (_pkg_relative_root / "data" / "raw").exists() else Path.cwd()
 
 DATA_RAW_DIR = PROJECT_ROOT / "data" / "raw"
 DATA_PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
