@@ -7,8 +7,10 @@ An end-to-end ML platform that uses aftermarket demand signals to forecast launc
 ## Table of Contents
 
 - [What This Project Does](#what-this-project-does)
+- [Key Results](#key-results)
 - [Why This Project Exists](#why-this-project-exists)
 - [Architecture Overview](#architecture-overview)
+- [Research Notebooks](#research-notebooks)
 - [Datasets](#datasets)
 - [Feature Engineering](#feature-engineering)
 - [Models and Performance](#models-and-performance)
@@ -41,6 +43,22 @@ The platform surfaces these insights through three interfaces:
 - A **FastAPI REST API** for programmatic access (demand forecasting + market analytics endpoints)
 - A **Streamlit dashboard** with four interactive pages (Market Overview, Launch Forecaster, Demand Insights, Launch Strategy)
 - **Jupyter notebooks** for exploratory analysis and reproducible research
+
+---
+
+## Key Results
+
+| Metric | Result |
+|---|---|
+| Model accuracy (Ensemble R²) | **0.95** on 99K StockX transactions |
+| Best single model (Random Forest R²) | **0.978**, MAE = $17 |
+| Top demand driver | Air Jordan brand flag (30.9% RF importance) |
+| High-demand products | Only **0.65%** of 2,000 products hit "High" tier |
+| Market inefficiencies detected | **1,861** products where highestBid > lowestAsk |
+| Optimal release window | **August + Wednesday** → +50% premium vs. annual average |
+| Geographic concentration | **California + New York = 36%** of all resale volume |
+| Estimated release-day causal lift | **~$2.16M/year** in secondary market premium (50 SKUs/year) |
+| Sentiment signal (Adidas) | Highest purchase-intent conversion rate across all brands |
 
 ---
 
@@ -96,6 +114,39 @@ The restructuring targets roles in data science and ML engineering within the fo
 ```
 
 **Data flow**: Raw CSV → `loader.py` validates columns → `transformers.py` cleans prices and parses dates → `FeaturePipeline` chains 5 extractors to produce 35 feature columns + `Number of Sales` (36 total) → Models train on features → `evaluation/` computes metrics → API/dashboard serve demand forecasts and analytics.
+
+---
+
+## Research Notebooks
+
+Six notebooks form a progressive analytical argument — each one answers a question raised by the previous, building from "can we model demand?" to "how do we engineer a hit release?"
+
+| # | Notebook | Question | Key Finding |
+|---|---|---|---|
+| 01 | `01_eda_stockx.ipynb` | Can aftermarket data predict launch demand? | Yes — Ensemble R²=0.95 on 99K transactions; Random Forest alone hits 0.978 |
+| 02 | `02_eda_market_dynamics.ipynb` | What does the current market look like? | Fragmented; 1,861 arbitrage opportunities; Adidas leads liquidity (9.6K avg deadstock) |
+| 03 | `03_demand_forecasting.ipynb` | Which products become hits, and why? | Only 0.65% reach "High" tier; bid count (42%) and price premium (28%) are the top drivers |
+| 04 | `04_release_strategy.ipynb` | How do we engineer a successful launch? | August + Wednesday + sub-$100 retail + no-restock policy = maximum premium signal |
+| 05 | `05_combined_signal.ipynb` | Which brands should we prioritize *right now*? | Adidas and Puma show aligned aftermarket + sentiment signals; Nike is saturated; Asics is an emerging watch |
+| 06 | `06_ab_testing_release_timing.ipynb` | Does release day *causally* drive premiums? | Saturday shows +41.6% vs Friday (p=0.0078), but proper causal test requires ~15K SKUs — methodology blueprint provided |
+
+### Notebook 05 — Combined Signal Integration
+
+The most differentiated notebook in the series. It bridges two independent data systems:
+
+- **Aftermarket fundamentals** (sneakers2023 market data) — price premiums, bid depth, volatility
+- **Consumer sentiment** (Reddit NLP pipeline) — 5,796 posts across 9 subreddits, scored for purchase intent and brand heat
+
+Brands are plotted in a 2×2 quadrant (premium × sentiment) to drive allocation decisions:
+
+| Quadrant | Brands | Signal |
+|---|---|---|
+| **Scale Up** | Adidas, Puma | High premium + positive sentiment — aligned, invest |
+| **Investigate** | New Balance | Moderate metrics with diverging signals — validate before committing |
+| **Emerging** | Asics | Low premium but strong sentiment — watch for breakout |
+| **Deprioritize** | Nike | Below-median on both axes despite high volume — saturated |
+
+The Reddit NLP pipeline is a separate companion package: [reddit-sentiment](https://github.com/hyunstar11/reddit-sentiment).
 
 ---
 
@@ -403,6 +454,8 @@ Portfolio/
 │   ├── 02_eda_market_dynamics.ipynb        # Competitive Market Intelligence
 │   ├── 03_demand_forecasting.ipynb         # Launch Demand Segmentation
 │   ├── 04_release_strategy.ipynb           # Launch Strategy & Timing Optimization
+│   ├── 05_combined_signal.ipynb            # Aftermarket + Reddit Sentiment Signal Fusion
+│   ├── 06_ab_testing_release_timing.ipynb  # A/B Test Design for Release Day Causality
 │   └── archive/
 │       └── Sneaker_ResellPred_Model_Edit.ipynb  # Original monolithic notebook
 │
