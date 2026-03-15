@@ -40,6 +40,7 @@ class Analyst:
         self._client = None
         if self._api_key:
             from anthropic import Anthropic
+
             self._client = Anthropic(api_key=self._api_key)
 
     @property
@@ -58,10 +59,7 @@ class Analyst:
                 "Retrieved context is shown below. Set the env var to enable answers."
             )
         else:
-            user_message = (
-                f"Data context:\n\n{context}\n\n"
-                f"Question: {question}"
-            )
+            user_message = f"Data context:\n\n{context}\n\nQuestion: {question}"
             response = self._client.messages.create(
                 model=self.MODEL,
                 max_tokens=512,

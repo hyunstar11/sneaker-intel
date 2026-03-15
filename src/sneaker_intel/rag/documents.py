@@ -34,7 +34,9 @@ class DocumentBuilder:
 
     def __init__(self, portfolio_root: Path | None = None):
         if portfolio_root:
-            self.REDDIT_DATA = portfolio_root / "reddit-sentiment" / "data" / "processed" / "annotated.parquet"
+            self.REDDIT_DATA = (
+                portfolio_root / "reddit-sentiment" / "data" / "processed" / "annotated.parquet"
+            )
 
     def build(self) -> list[Document]:
         """Load all data sources and return the full document set."""
@@ -47,19 +49,27 @@ class DocumentBuilder:
         mkt["release_month"] = mkt["release"].dt.strftime("%b")
 
         CORE = ["Nike", "Jordan", "adidas", "New Balance"]
-        BRAND_MAP = {"Nike": "Nike", "Jordan": "Nike", "adidas": "Adidas",
-                     "New Balance": "New Balance", "Puma": "Puma", "ASICS": "Asics"}
+        BRAND_MAP = {
+            "Nike": "Nike",
+            "Jordan": "Nike",
+            "adidas": "Adidas",
+            "New Balance": "New Balance",
+            "Puma": "Puma",
+            "ASICS": "Asics",
+        }
         core = mkt[mkt["brand"].isin(CORE)].copy()
         mkt["brand_norm"] = mkt["brand"].map(BRAND_MAP)
 
         stx = load_dataset(DatasetType.STOCKX)
+
         def clean_price(s):
             return pd.to_numeric(str(s).replace("$", "").replace(",", ""), errors="coerce")
+
         stx["sale_price"] = stx["Sale Price"].apply(clean_price)
         stx["retail_price"] = stx["Retail Price"].apply(clean_price)
         stx["days_post_release"] = (
-            pd.to_datetime(stx["Order Date"], format="%m/%d/%y", errors="coerce") -
-            pd.to_datetime(stx["Release Date"], format="%m/%d/%y", errors="coerce")
+            pd.to_datetime(stx["Order Date"], format="%m/%d/%y", errors="coerce")
+            - pd.to_datetime(stx["Release Date"], format="%m/%d/%y", errors="coerce")
         ).dt.days
         stx["premium_pct"] = (stx["sale_price"] - stx["retail_price"]) / stx["retail_price"] * 100
         stx = stx[stx["days_post_release"].between(0, 365)].copy()
@@ -93,35 +103,54 @@ class DocumentBuilder:
         docs = []
         for _, row in demand.iterrows():
             brand = row["brand_norm"]
-            docs.append(Document(
-                id=f"brand_demand_{brand.lower().replace(' ', '_')}",
-                title=f"{brand} — Aftermarket Demand Signal",
-                content=(
-                    f"{brand} has {row['products']:.0f} products in the Market 2023 dataset. "
-                    f"Median resale premium: {row['median_premium']:.3f}× retail "
-                    f"(meaning secondary market buyers pay {row['median_premium']*100:.0f}% of retail on average). "
-                    f"Total deadstock units sold: {row['total_deadstock']:,.0f}. "
-                    f"Average market volatility: {row['avg_volatility']:.3f}. "
-                    f"Median active bids (demand depth): {row['median_bids']:.1f}. "
-                    f"{'High' if row['median_premium'] > 0.25 else 'Moderate' if row['median_premium'] > 0.15 else 'Low'} "
-                    f"demand tier based on resale premium."
-                ),
-                metadata={"brand": brand, "topic": "demand", "source": "market_2023"},
-            ))
+            docs.append(
+                Document(
+                    id=f"brand_demand_{brand.lower().replace(' ', '_')}",
+                    title=f"{brand} — Aftermarket Demand Signal",
+                    content=(
+                        f"{brand} has {row['products']:.0f} products in the Market 2023 dataset. "
+                        f"Median resale premium: {row['median_premium']:.3f}× retail "
+                        f"(meaning secondary market buyers pay {row['median_premium'] * 100:.0f}% of retail on average). "
+                        f"Total deadstock units sold: {row['total_deadstock']:,.0f}. "
+                        f"Average market volatility: {row['avg_volatility']:.3f}. "
+                        f"Median active bids (demand depth): {row['median_bids']:.1f}. "
+                        f"{'High' if row['median_premium'] > 0.25 else 'Moderate' if row['median_premium'] > 0.15 else 'Low'} "
+                        f"demand tier based on resale premium."
+                    ),
+                    metadata={"brand": brand, "topic": "demand", "source": "market_2023"},
+                )
+            )
         return docs
 
     def _release_timing_doc(self, core: pd.DataFrame) -> Document:
-        MONTH_ORDER = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+        MONTH_ORDER = [
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
+        ]
         timing_monthly = (
             core.dropna(subset=["release_month"])
             .groupby("release_month")["pricePremium"]
             .agg(["median", "count"])
-            .reindex(MONTH_ORDER).dropna().reset_index()
+            .reindex(MONTH_ORDER)
+            .dropna()
+            .reset_index()
         )
         timing_dow = (
             core.dropna(subset=["release_dow"])
             .groupby("release_dow")["pricePremium"]
-            .median().reset_index().sort_values("pricePremium", ascending=False)
+            .median()
+            .reset_index()
+            .sort_values("pricePremium", ascending=False)
         )
         best_month = timing_monthly.loc[timing_monthly["median"].idxmax(), "release_month"]
         best_prem = timing_monthly["median"].max()
@@ -135,13 +164,13 @@ class DocumentBuilder:
                 f"Analysis of {len(core):,} core-brand releases (Nike, Jordan, adidas, New Balance) "
                 f"shows release timing significantly affects resale premium. "
                 f"Best release month: {best_month} ({best_prem:.3f}× median premium, "
-                f"{(best_prem-avg_prem)/avg_prem*100:+.0f}% above annual average). "
+                f"{(best_prem - avg_prem) / avg_prem * 100:+.0f}% above annual average). "
                 f"Top 3 months by premium: {', '.join(top3_months)}. "
                 f"Best release day of week: {best_day}. "
                 f"Friday releases show median premium of "
-                f"{core[core['release_dow']=='Friday']['pricePremium'].median():.3f}×; "
+                f"{core[core['release_dow'] == 'Friday']['pricePremium'].median():.3f}×; "
                 f"Saturday releases show "
-                f"{core[core['release_dow']=='Saturday']['pricePremium'].median():.3f}×. "
+                f"{core[core['release_dow'] == 'Saturday']['pricePremium'].median():.3f}×. "
                 f"Saturday drops outperform Friday by ~6.7 percentage points of premium. "
                 f"Recommendation: target {best_month} drops on {best_day}s for maximum demand signal."
             ),
@@ -150,12 +179,21 @@ class DocumentBuilder:
 
     def _pricing_doc(self, core: pd.DataFrame) -> Document:
         bins = [0, 100, 125, 150, 175, 200, 250, 300, float("inf")]
-        labels = ["<$100","$100–125","$125–150","$150–175","$175–200","$200–250","$250–300","$300+"]
+        labels = [
+            "<$100",
+            "$100–125",
+            "$125–150",
+            "$150–175",
+            "$175–200",
+            "$200–250",
+            "$250–300",
+            "$300+",
+        ]
         core = core.copy()
         core["price_bin"] = pd.cut(core["retail"], bins=bins, labels=labels)
         pricing = (
             core.groupby("price_bin", observed=True)
-            .agg(median_premium=("pricePremium","median"), products=("item","count"))
+            .agg(median_premium=("pricePremium", "median"), products=("item", "count"))
             .reset_index()
         )
         sweet = pricing.loc[pricing["median_premium"].idxmax()]
@@ -172,7 +210,8 @@ class DocumentBuilder:
                 + " | ".join(
                     f"{row['price_bin']}: {row['median_premium']:.3f}×"
                     for _, row in pricing.iterrows()
-                ) + ". "
+                )
+                + ". "
                 f"Recommendation: price limited releases in the {sweet['price_bin']} band "
                 f"to maximize unmet demand signal."
             ),
@@ -205,7 +244,8 @@ class DocumentBuilder:
     def _geographic_doc(self, stx: pd.DataFrame) -> Document:
         geo = (
             stx.groupby("Buyer Region")
-            .size().reset_index(name="transactions")
+            .size()
+            .reset_index(name="transactions")
             .sort_values("transactions", ascending=False)
         )
         geo["share"] = geo["transactions"] / geo["transactions"].sum() * 100
@@ -227,7 +267,8 @@ class DocumentBuilder:
                 f"Only {states_50} states are needed to cover 50% of demand. "
                 f"Only {states_75} states are needed to cover 75% of demand. "
                 f"Top 5 states by volume: "
-                + ", ".join(geo.head(5)["Buyer Region"].tolist()) + ". "
+                + ", ".join(geo.head(5)["Buyer Region"].tolist())
+                + ". "
                 f"Recommendation: weight SNKRS geofencing and retailer door allocation "
                 f"toward {top2.iloc[0]['Buyer Region']} and {top2.iloc[1]['Buyer Region']} first."
             ),
@@ -236,7 +277,8 @@ class DocumentBuilder:
 
     def _size_run_doc(self, stx: pd.DataFrame) -> Document:
         size_dist = (
-            stx.groupby("Shoe Size").size()
+            stx.groupby("Shoe Size")
+            .size()
             .reset_index(name="transactions")
             .sort_values("Shoe Size")
         )
@@ -292,61 +334,83 @@ class DocumentBuilder:
         # Channel attribution
         rs_ch = rs.explode("brands").explode("channels")
         rs_ch = rs_ch[
-            rs_ch["brands"].notna() & (rs_ch["brands"].str.len() > 0) &
-            rs_ch["channels"].notna() & (rs_ch["channels"].str.len() > 0)
+            rs_ch["brands"].notna()
+            & (rs_ch["brands"].str.len() > 0)
+            & rs_ch["channels"].notna()
+            & (rs_ch["channels"].str.len() > 0)
         ].reset_index(drop=True)
         top_channels = (
-            rs_ch.groupby(["brands", "channels"]).size()
+            rs_ch.groupby(["brands", "channels"])
+            .size()
             .reset_index(name="n")
             .sort_values(["brands", "n"], ascending=[True, False])
-            .groupby("brands").head(3)
+            .groupby("brands")
+            .head(3)
         )
 
         docs = []
         for _, row in sentiment.iterrows():
             brand = row["brand"]
             brand_ch = top_channels[top_channels["brands"] == brand]["channels"].tolist()
-            tone = "positive" if row["avg_sentiment"] > 0.1 else "neutral" if row["avg_sentiment"] > -0.1 else "negative"
-            docs.append(Document(
-                id=f"reddit_sentiment_{brand.lower().replace(' ', '_')}",
-                title=f"{brand} — Reddit Consumer Sentiment (Feb 2026)",
-                content=(
-                    f"{brand} appears in {row['mentions']:.0f} Reddit posts and comments "
-                    f"across 9 sneaker subreddits (Feb 2026). "
-                    f"Average hybrid sentiment score: {row['avg_sentiment']:+.3f} ({tone}). "
-                    f"{row['positive_pct']:.1f}% of mentions are positive; "
-                    f"{row['negative_pct']:.1f}% are negative. "
-                    f"Active purchase seekers ('W2C', 'where to cop'): {row['seeking']:.0f}. "
-                    f"Confirmed purchases: {row['completed']:.0f}. "
-                    + (f"Top retail channels mentioned alongside {brand}: "
-                       f"{', '.join(brand_ch)}. " if brand_ch else "")
-                    + f"Consumer narrative is {tone} — "
-                    + ("strong buy intent and positive brand perception." if tone == "positive"
-                       else "mixed signals, monitor for trend shifts." if tone == "neutral"
-                       else "negative sentiment, investigate root cause.")
-                ),
-                metadata={"brand": brand, "topic": "sentiment", "source": "reddit_feb2026"},
-            ))
+            tone = (
+                "positive"
+                if row["avg_sentiment"] > 0.1
+                else "neutral"
+                if row["avg_sentiment"] > -0.1
+                else "negative"
+            )
+            docs.append(
+                Document(
+                    id=f"reddit_sentiment_{brand.lower().replace(' ', '_')}",
+                    title=f"{brand} — Reddit Consumer Sentiment (Feb 2026)",
+                    content=(
+                        f"{brand} appears in {row['mentions']:.0f} Reddit posts and comments "
+                        f"across 9 sneaker subreddits (Feb 2026). "
+                        f"Average hybrid sentiment score: {row['avg_sentiment']:+.3f} ({tone}). "
+                        f"{row['positive_pct']:.1f}% of mentions are positive; "
+                        f"{row['negative_pct']:.1f}% are negative. "
+                        f"Active purchase seekers ('W2C', 'where to cop'): {row['seeking']:.0f}. "
+                        f"Confirmed purchases: {row['completed']:.0f}. "
+                        + (
+                            f"Top retail channels mentioned alongside {brand}: "
+                            f"{', '.join(brand_ch)}. "
+                            if brand_ch
+                            else ""
+                        )
+                        + f"Consumer narrative is {tone} — "
+                        + (
+                            "strong buy intent and positive brand perception."
+                            if tone == "positive"
+                            else "mixed signals, monitor for trend shifts."
+                            if tone == "neutral"
+                            else "negative sentiment, investigate root cause."
+                        )
+                    ),
+                    metadata={"brand": brand, "topic": "sentiment", "source": "reddit_feb2026"},
+                )
+            )
 
         # Overall market sentiment doc
         total = len(rs)
         avg_all = rs["hybrid_score"].mean()
-        docs.append(Document(
-            id="reddit_market_overview",
-            title="Reddit Sneaker Market — Overall Sentiment Overview",
-            content=(
-                f"Dataset: {total:,} Reddit posts and comments from 9 subreddits "
-                f"(r/Sneakers, r/Nike, r/Adidas, r/SneakerMarket, r/Jordans, r/Yeezy, "
-                f"r/malefashionadvice, r/Running, r/Basketball), collected Feb 2026. "
-                f"Overall average sentiment: {avg_all:+.3f} (positive). "
-                f"Total brands tracked: {sentiment['brand'].nunique()}. "
-                f"Most mentioned brand: {sentiment.loc[sentiment['mentions'].idxmax(), 'brand']} "
-                f"({sentiment['mentions'].max():.0f} mentions). "
-                f"Most positive brand: {sentiment.loc[sentiment['avg_sentiment'].idxmax(), 'brand']} "
-                f"(sentiment {sentiment['avg_sentiment'].max():+.3f}). "
-                f"The sneaker community shows broadly positive sentiment with Nike and Adidas "
-                f"dominating conversation volume."
-            ),
-            metadata={"topic": "market_overview", "source": "reddit_feb2026"},
-        ))
+        docs.append(
+            Document(
+                id="reddit_market_overview",
+                title="Reddit Sneaker Market — Overall Sentiment Overview",
+                content=(
+                    f"Dataset: {total:,} Reddit posts and comments from 9 subreddits "
+                    f"(r/Sneakers, r/Nike, r/Adidas, r/SneakerMarket, r/Jordans, r/Yeezy, "
+                    f"r/malefashionadvice, r/Running, r/Basketball), collected Feb 2026. "
+                    f"Overall average sentiment: {avg_all:+.3f} (positive). "
+                    f"Total brands tracked: {sentiment['brand'].nunique()}. "
+                    f"Most mentioned brand: {sentiment.loc[sentiment['mentions'].idxmax(), 'brand']} "
+                    f"({sentiment['mentions'].max():.0f} mentions). "
+                    f"Most positive brand: {sentiment.loc[sentiment['avg_sentiment'].idxmax(), 'brand']} "
+                    f"(sentiment {sentiment['avg_sentiment'].max():+.3f}). "
+                    f"The sneaker community shows broadly positive sentiment with Nike and Adidas "
+                    f"dominating conversation volume."
+                ),
+                metadata={"topic": "market_overview", "source": "reddit_feb2026"},
+            )
+        )
         return docs

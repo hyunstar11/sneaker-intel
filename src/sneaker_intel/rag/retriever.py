@@ -41,8 +41,6 @@ class Retriever:
         parts = []
         for i, (doc, score) in enumerate(results, 1):
             parts.append(
-                f"[Source {i} | relevance={score:.3f}]\n"
-                f"Title: {doc.title}\n"
-                f"{doc.content}"
+                f"[Source {i} | relevance={score:.3f}]\nTitle: {doc.title}\n{doc.content}"
             )
         return "\n\n---\n\n".join(parts)
