@@ -11,11 +11,11 @@ import pandas as pd
 
 # Brand market data mirror (sourced from sneakers2023.csv / NB08)
 _STOCKX_BRAND_MARKET: dict[str, dict[str, object]] = {
-    "Adidas":      {"premium": 0.3070, "avg_deadstock": 9630,  "volatility": "medium"},
-    "Asics":       {"premium": 0.1290, "avg_deadstock": 1000,  "volatility": "low"},
-    "New Balance": {"premium": 0.2185, "avg_deadstock": 2886,  "volatility": "low"},
-    "Nike":        {"premium": 0.1770, "avg_deadstock": 6265,  "volatility": "medium"},
-    "Puma":        {"premium": 0.4500, "avg_deadstock": 2967,  "volatility": "low"},
+    "Adidas": {"premium": 0.3070, "avg_deadstock": 9630, "volatility": "medium"},
+    "Asics": {"premium": 0.1290, "avg_deadstock": 1000, "volatility": "low"},
+    "New Balance": {"premium": 0.2185, "avg_deadstock": 2886, "volatility": "low"},
+    "Nike": {"premium": 0.1770, "avg_deadstock": 6265, "volatility": "medium"},
+    "Puma": {"premium": 0.4500, "avg_deadstock": 2967, "volatility": "low"},
 }
 
 
@@ -468,8 +468,10 @@ class DocumentBuilder:
                 else 0.0
             )
             tone = (
-                "positive" if r["avg_sentiment"] > 0.1
-                else "neutral" if r["avg_sentiment"] > -0.1
+                "positive"
+                if r["avg_sentiment"] > 0.1
+                else "neutral"
+                if r["avg_sentiment"] > -0.1
                 else "negative"
             )
             lines.append(
@@ -501,9 +503,7 @@ class DocumentBuilder:
 
         content = (
             "Cross-signal analysis — StockX resale premium vs. Reddit consumer sentiment "
-            "per brand:\n"
-            + "\n".join(lines)
-            + f"\n\nKey insights: "
+            "per brand:\n" + "\n".join(lines) + f"\n\nKey insights: "
             f"Strongest combined signal (high premium + positive sentiment): {best_combo}. "
             f"Highest Reddit sentiment: {rising_sent} "
             f"({brand_data[rising_sent]['sentiment']:+.3f}). "
@@ -538,7 +538,13 @@ class DocumentBuilder:
             bdf = history[history["brand"] == brand].sort_values("timestamp")
             if len(bdf) >= 2:
                 delta = bdf["health_score"].iloc[-1] - bdf["health_score"].iloc[-2]
-                direction = "↑ improving" if delta > 0.01 else "↓ declining" if delta < -0.01 else "→ stable"
+                direction = (
+                    "↑ improving"
+                    if delta > 0.01
+                    else "↓ declining"
+                    if delta < -0.01
+                    else "→ stable"
+                )
             else:
                 direction = "→ stable (insufficient history)"
             lines.append(
