@@ -9,6 +9,15 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+# Brand market data mirror (sourced from sneakers2023.csv / NB08)
+_STOCKX_BRAND_MARKET: dict[str, dict[str, object]] = {
+    "Adidas":      {"premium": 0.3070, "avg_deadstock": 9630,  "volatility": "medium"},
+    "Asics":       {"premium": 0.1290, "avg_deadstock": 1000,  "volatility": "low"},
+    "New Balance": {"premium": 0.2185, "avg_deadstock": 2886,  "volatility": "low"},
+    "Nike":        {"premium": 0.1770, "avg_deadstock": 6265,  "volatility": "medium"},
+    "Puma":        {"premium": 0.4500, "avg_deadstock": 2967,  "volatility": "low"},
+}
+
 
 @dataclass
 class Document:
@@ -37,6 +46,8 @@ class DocumentBuilder:
             self.REDDIT_DATA = (
                 portfolio_root / "reddit-sentiment" / "data" / "processed" / "annotated.parquet"
             )
+        _reddit_root = self.REDDIT_DATA.parent
+        self._health_history = _reddit_root / "health_score_history.csv"
 
     def build(self) -> list[Document]:
         """Load all data sources and return the full document set."""
@@ -83,6 +94,9 @@ class DocumentBuilder:
         docs.append(self._size_run_doc(stx))
         if self.REDDIT_DATA.exists():
             docs += self._reddit_docs()
+            docs.append(self._cross_signal_doc())
+        if self._health_history.exists():
+            docs.append(self._health_trend_doc())
         return docs
 
     # ── individual document builders ──────────────────────────────────────
@@ -390,7 +404,7 @@ class DocumentBuilder:
                 )
             )
 
-        # Overall market sentiment doc
+        # Overall market sentiment doc — with cross-signal teaser
         total = len(rs)
         avg_all = rs["hybrid_score"].mean()
         docs.append(
@@ -414,3 +428,138 @@ class DocumentBuilder:
             )
         )
         return docs
+
+    def _cross_signal_doc(self) -> Document:
+        """Combined StockX market signal + Reddit sentiment per brand."""
+
+        rs = pd.read_parquet(self.REDDIT_DATA)
+        rs["brands"] = rs["brands"].apply(
+            lambda x: list(x) if hasattr(x, "__iter__") and not isinstance(x, str) else []
+        )
+        rs_exp = rs.explode("brands").dropna(subset=["brands"])
+        rs_exp = rs_exp[rs_exp["brands"].str.len() > 0]
+        sentiment = (
+            rs_exp.groupby("brands")
+            .agg(
+                avg_sentiment=("hybrid_score", "mean"),
+                mentions=("hybrid_score", "count"),
+                seeking=("primary_intent", lambda x: (x == "seeking_purchase").sum()),
+                completed=("primary_intent", lambda x: (x == "completed_purchase").sum()),
+            )
+            .reset_index()
+            .rename(columns={"brands": "brand"})
+        )
+
+        lines = []
+        for brand, mkt in _STOCKX_BRAND_MARKET.items():
+            row = sentiment[sentiment["brand"] == brand]
+            premium_pct = mkt["premium"] * 100
+            deadstock = mkt["avg_deadstock"]
+            if row.empty:
+                lines.append(
+                    f"{brand}: StockX premium {premium_pct:.1f}%, "
+                    f"deadstock {deadstock:,.0f} units; no Reddit data available."
+                )
+                continue
+            r = row.iloc[0]
+            intent_ratio = (
+                r["completed"] / (r["seeking"] + r["completed"])
+                if (r["seeking"] + r["completed"]) > 0
+                else 0.0
+            )
+            tone = (
+                "positive" if r["avg_sentiment"] > 0.1
+                else "neutral" if r["avg_sentiment"] > -0.1
+                else "negative"
+            )
+            lines.append(
+                f"{brand}: StockX resale premium {premium_pct:.1f}% above retail, "
+                f"deadstock {deadstock:,.0f} units sold; "
+                f"Reddit sentiment {r['avg_sentiment']:+.3f} ({tone}), "
+                f"{r['mentions']:.0f} mentions, "
+                f"purchase conversion {intent_ratio:.1%} "
+                f"({r['completed']:.0f} confirmed / {r['seeking']:.0f} seeking)."
+            )
+
+        # Identify cross-signal highlights
+        brand_data = {}
+        for brand, mkt in _STOCKX_BRAND_MARKET.items():
+            row = sentiment[sentiment["brand"] == brand]
+            brand_data[brand] = {
+                "premium": mkt["premium"],
+                "sentiment": float(row["avg_sentiment"].iloc[0]) if not row.empty else 0.0,
+            }
+        best_combo = max(
+            brand_data,
+            key=lambda b: brand_data[b]["premium"] + brand_data[b]["sentiment"],
+        )
+        rising_sent = max(brand_data, key=lambda b: brand_data[b]["sentiment"])
+        undervalued = max(
+            brand_data,
+            key=lambda b: brand_data[b]["sentiment"] - brand_data[b]["premium"],
+        )
+
+        content = (
+            "Cross-signal analysis — StockX resale premium vs. Reddit consumer sentiment "
+            "per brand:\n"
+            + "\n".join(lines)
+            + f"\n\nKey insights: "
+            f"Strongest combined signal (high premium + positive sentiment): {best_combo}. "
+            f"Highest Reddit sentiment: {rising_sent} "
+            f"({brand_data[rising_sent]['sentiment']:+.3f}). "
+            f"Best sentiment-to-premium ratio (undervalued social signal): {undervalued} — "
+            f"strong community enthusiasm relative to current resale premium suggests "
+            f"emerging demand not yet priced into the secondary market."
+        )
+        return Document(
+            id="cross_signal_analysis",
+            title="Cross-Signal Analysis — StockX Premium vs. Reddit Sentiment by Brand",
+            content=content,
+            metadata={"topic": "cross_signal", "source": "combined"},
+        )
+
+    def _health_trend_doc(self) -> Document:
+        """Brand health score history — trend direction per brand."""
+        history = pd.read_csv(self._health_history, parse_dates=["timestamp"])
+        if history.empty:
+            return Document(
+                id="health_trend",
+                title="Brand Health Score Trend",
+                content="No health score history available yet.",
+                metadata={"topic": "health_trend", "source": "health_score_history"},
+            )
+
+        latest_ts = history["timestamp"].max()
+        latest = history[history["timestamp"] == latest_ts]
+
+        lines = []
+        for _, row in latest.sort_values("health_score", ascending=False).iterrows():
+            brand = row["brand"]
+            bdf = history[history["brand"] == brand].sort_values("timestamp")
+            if len(bdf) >= 2:
+                delta = bdf["health_score"].iloc[-1] - bdf["health_score"].iloc[-2]
+                direction = "↑ improving" if delta > 0.01 else "↓ declining" if delta < -0.01 else "→ stable"
+            else:
+                direction = "→ stable (insufficient history)"
+            lines.append(
+                f"{brand}: health score {row['health_score']:.3f} "
+                f"({row['signal']}), trend {direction}, "
+                f"avg sentiment {row['avg_sentiment']:+.3f}, "
+                f"{row['mention_count']:.0f} Reddit mentions."
+            )
+
+        n_snapshots = history["timestamp"].nunique()
+        content = (
+            f"Brand health scores as of {latest_ts.strftime('%Y-%m-%d')} "
+            f"({n_snapshots} historical snapshots).\n"
+            + "\n".join(lines)
+            + "\n\nHealth score formula: 40% StockX resale premium + 25% deadstock volume "
+            "  + 20% Reddit sentiment + 15% purchase intent (all min-max normalized). "
+            "Scores above 0.6 = Scale Up, 0.4–0.6 = Hold, below 0.4 = Watch."
+        )
+        return Document(
+            id="health_trend",
+            title="Brand Health Score — Composite Signal & Trend",
+            content=content,
+            metadata={"topic": "health_trend", "source": "health_score_history"},
+        )
